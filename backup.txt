@@ -1,0 +1,179 @@
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+
+import java.security.*;
+import javax.crypto.*;
+import javax.crypto.spec.SecretKeySpec;
+import java.io.*;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
+
+public class DesempaquetarExamen {
+
+    public static void main(String[] args) throws Exception {
+
+        /*
+        *  args = alumno1.paquete RespuestasExamen alumno1.publica profesor.privada
+        * */
+
+        // Comprobar argumentos
+        if (args.length != 4) {
+            mensajeAyuda();
+            System.exit(1);
+        }
+
+		/* Cargar "provider" (solo si no se usa el que viene por defecto) */
+        Security.addProvider(new BouncyCastleProvider());  // Usa provider BC
+
+        //Leer paquete
+        Paquete paquete = leerPaquete(args[0]);
+
+        //Desempaquetar examen, clave y firma
+        byte[] examenCifrado = desempaquetar(paquete, "Examen");
+        byte[] claveCifrado = desempaquetar(paquete, "Clave");
+        byte[] firmaCifrado = desempaquetar(paquete, "Firma");
+
+        //Desencriptar clave con clave del profesor privado
+
+        PrivateKey profesorKey = getPrivateKeyFromFile(args[3]);
+        SecretKey claveSecreta = descifrarClave(claveCifrado,profesorKey);
+
+        //Desencriptar el examen con clave secreta simetrica
+
+        descifrarExamen(claveSecreta,examenCifrado,args[1]);
+
+        //Desencriptar firma con clave del alumno publica
+
+        PublicKey alumnoKey = getPublicKeyFromFile(args[2]);
+        byte[] resumen = DesencriptarResumen(firmaCifrado,alumnoKey);
+
+
+
+    }
+
+    private static Paquete leerPaquete(String nombrePaquete){
+        return PaqueteDAO.leerPaquete(nombrePaquete);
+    }
+
+    private static byte[] desempaquetar(Paquete paquete, String nombreContenido) {
+
+        Bloque firma = paquete.getBloque(nombreContenido);
+        return firma.getContenido();
+
+    }
+
+    private static PrivateKey getPrivateKeyFromFile(String file) throws Exception{
+
+        //Leer datos de la clave privada del fichero
+        File ficheroClavePrivada = new File(file);
+        int tamanhoClavePrivada = (int) ficheroClavePrivada.length();
+        byte[] bufferPriv = new byte[tamanhoClavePrivada];
+
+        FileInputStream in = new FileInputStream(ficheroClavePrivada);
+        in.read(bufferPriv,0,tamanhoClavePrivada);
+        in.close();
+
+        //Recuperamos del formato PKCS8
+        PKCS8EncodedKeySpec clavePrivadaSpec = new PKCS8EncodedKeySpec(bufferPriv);
+        PrivateKey clavePrivada = KeyFactory.getInstance("RSA","BC").generatePrivate(clavePrivadaSpec);
+
+        System.out.println("Clave Privada Profesor: "+ clavePrivada);
+
+        return clavePrivada;
+    }
+
+    private static PublicKey getPublicKeyFromFile(String file) throws Exception{
+        File ficheroClavePublica = new File(file);
+        int tamanoFicheroClavePublica = (int) ficheroClavePublica.length();
+        byte[] bufferPub = new byte[tamanoFicheroClavePublica];
+
+        FileInputStream in = new FileInputStream(ficheroClavePublica);
+        in.read(bufferPub, 0, tamanoFicheroClavePublica);
+        in.close();
+
+        // 4.2 Recuperar clave publica desde datos codificados en formato X509
+        X509EncodedKeySpec clavePublicaSpec = new X509EncodedKeySpec(bufferPub);
+        PublicKey clavePublica = KeyFactory.getInstance("RSA","BC").generatePublic(clavePublicaSpec);
+
+        //TESTING PURPOSES ONLY
+        System.out.println("CLAVE PUBLICA: "+clavePublica);
+
+        return clavePublica;
+
+    }
+
+    private static SecretKey descifrarClave(byte[]claveCifrado, PrivateKey profesorKey) throws Exception{
+
+        Cipher cifrador = Cipher.getInstance("RSA", "BC"); // Hace uso del provider BC
+        cifrador.init(Cipher.DECRYPT_MODE, profesorKey); // Descrifra con la clave privada
+
+        System.out.println("Descifrar con clave privada");
+        byte[] bufferPlano2 = cifrador.doFinal(claveCifrado);
+
+        System.out.println("CLAVE DESCIFRADA");
+        mostrarBytes(bufferPlano2);
+        System.out.println("\n-------------------------------");
+
+        SecretKey toRet = new SecretKeySpec(bufferPlano2, 0, bufferPlano2.length, "DES"); //Para que tipo de algoritmo es la clave
+
+        return toRet;
+    }
+
+    private static void descifrarExamen(SecretKey claveSecreta, byte[] examenCifrado, String nombreFichero) throws Exception{
+
+
+        Cipher cifrador = Cipher.getInstance("DES/ECB/PKCS5Padding");
+
+        cifrador.init(Cipher.DECRYPT_MODE, claveSecreta);
+
+        FileOutputStream out = new FileOutputStream(nombreFichero+".descifrado");
+
+        byte[] bufferCifrado = cifrador.doFinal(examenCifrado);
+
+//        bufferCifrado = cifrador.doFinal();
+
+        //out.write(cifrador.doFinal(examenCifrado));
+
+        out.write(bufferCifrado);
+
+        out.close();
+
+    }
+
+    private static byte[] DesencriptarResumen(byte[] firmaCifrado, PublicKey alumnoPublic) throws Exception{
+
+        byte[] resumen;
+
+        Cipher cifrador = Cipher.getInstance("RSA","BC");
+
+        cifrador.init(Cipher.DECRYPT_MODE, alumnoPublic);
+
+        resumen = cifrador.doFinal(firmaCifrado);
+
+        //TESTING PURPOSES ONLY
+        System.out.println("RESUMEN DESCIFRADO: ");
+        mostrarBytes(resumen);
+
+        return resumen;
+
+    }
+
+    //Funciones auxiliares
+    private static void mostrarBytes(byte [] buffer) {
+
+        System.out.write(buffer, 0, buffer.length);
+    }
+
+    private static void guardarBytes(byte[] resumen, String file) throws Exception{
+        FileOutputStream out = new FileOutputStream( file + ".hash");
+        out.write(resumen);
+        out.close();
+    }
+
+    private static void mensajeAyuda() {
+        System.out.println("Empaquetar examen funciones");
+        System.out.println("\tSintaxis: java Paquete FicheroExamen ClaveAlumnoPublica ClaveProfesorPrivada");
+        System.out.println();
+    }
+
+
+}
