@@ -28,7 +28,7 @@ public class EmpaquetarExamen {
 
 
         //RESUMEN (Acabado)
-        byte[] hashingExamen = funcionHashResumen(args[0]);
+        byte[] hashingExamen = funcionHashing(args[0]);
         PrivateKey AlumnoPrivateKey = getPrivateKeyFromFile(args[2]);
         byte[] hashingExamenCifrado = EncriptarResumen(hashingExamen,AlumnoPrivateKey);
 
