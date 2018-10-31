@@ -20,7 +20,6 @@ public class GenerarClaves {
             System.exit(1);
         }
 
-
         // Anadir provider  (el provider por defecto no soporta RSA)
         Security.addProvider(new BouncyCastleProvider()); // Cargar el provider BC
 

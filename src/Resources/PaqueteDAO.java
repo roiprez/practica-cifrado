@@ -112,7 +112,7 @@ public class PaqueteDAO {
             linea = in.readLine();
         }
         if (linea.equals(FIN_PAQUETE)) {
-            return null;  // No hay más bloques
+            return null;  // No hay mas bloques
         } else {
             Bloque result = new Bloque();
             result.setNombre(extraerNombreBloque(linea));
@@ -160,7 +160,7 @@ public class PaqueteDAO {
         Paquete paquete = new Paquete();
         paquete.anadirBloque(new Bloque("parte1", "abcdefg".getBytes(Charset.forName("UTF-8"))));
         paquete.anadirBloque(new Bloque("parte2", "abc".getBytes(Charset.forName("UTF-8"))));
-        paquete.anadirBloque(new Bloque("parte3 muy larga", "abcdefghijklmnñopqrstuvwxyz1234567890".getBytes(Charset.forName("UTF-8"))));
+        paquete.anadirBloque(new Bloque("parte3 muy larga", "abcdefghijklmnï¿½opqrstuvwxyz1234567890".getBytes(Charset.forName("UTF-8"))));
 
 	
         System.out.println("** Bloques del paquete");
