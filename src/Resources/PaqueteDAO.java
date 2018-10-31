@@ -7,10 +7,13 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.nio.charset.Charset;
+import java.security.spec.EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+
+import org.bouncycastle.asn1.crmf.EncKeyWithID;
 import org.bouncycastle.util.encoders.Base64;
 
 /**
