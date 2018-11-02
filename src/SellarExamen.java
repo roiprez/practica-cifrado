@@ -14,7 +14,8 @@ public class SellarExamen {
 	 public static void main(String args[]) throws Exception {
 
 	        /*
-	        *  args = alumno1.paquete sellador.privada
+	        *  args[0] = Alumno.paquete
+	        *  args[1] = EntSellado.privada
 	        * */
 
 	        // Comprobar argumentos
@@ -71,7 +72,7 @@ public class SellarExamen {
 	        MessageDigest messageDigest = MessageDigest.getInstance("MD5");
 
 	        messageDigest.update(datosFirma); // Hacer el hash de los datos de firma
-	        messageDigest.update(TIMESTAMP); // Añadimos el hash de timestamp
+	        messageDigest.update(TIMESTAMP); // Aï¿½adimos el hash de timestamp
 
 	        byte[] resumenN = messageDigest.digest();
 
