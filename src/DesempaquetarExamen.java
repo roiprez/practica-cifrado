@@ -14,7 +14,7 @@ import java.security.spec.X509EncodedKeySpec;
 
 public class DesempaquetarExamen {
     /* args[0] = "Alumno.paquete";
-    args[1] = "ExamenClaro.txt";
+    args[1] = "ExamenDescifrado.txt";
     args [2] = "EntSellado.publica";
     args [3] = "Alumno.publica";
     args [4] = "Profesor.privada";*/
@@ -38,19 +38,19 @@ public class DesempaquetarExamen {
 
         // Comprobamos que el sello de tiempo está correctamente puesto
         if (comprobarSello(paqueteSellado, entSelladoPublica)) {
-            System.out.println("\nEl sello es correcto");
+            System.out.println("El sello es correcto y no ha sufrido modificaciones");
         } else {
             System.out.println("\nEl sello no se ha hecho en la hora indicada por la Entidad de Sellado");
             System.exit(1);
         }
 
         // Desciframos el contenido del Examen
-        descifrarExamen(paqueteSellado, profesorPrivateKey, "ExamenDescifrado.txt");
+        descifrarExamen(paqueteSellado, profesorPrivateKey, args[1]);
 
         //Comprobamos que el contenido del examen pertenece realmente al Alumno
         byte[] datosFirma = paqueteSellado.getBloque("Firma").getContenido();
         byte[] firmaHash = desencriptarResumen(datosFirma, alumnoPublica);
-        byte[] hashingExamen = funcionHashing("ExamenDescifrado.txt");
+        byte[] hashingExamen = funcionHashing(args[1]);
 
         if (MessageDigest.isEqual(hashingExamen, firmaHash)) {
             System.out.println("El examen ha sido realizado por el alumno");
@@ -71,6 +71,8 @@ public class DesempaquetarExamen {
         byte[] datosFirma = paquete.getBloque("Firma").getContenido();
         byte[] hashFirma = funcionHashFirma(datosFirma, timeStamp);
         byte[] selloDescifrado = descifrarHashFirma(selloCifrado, entSelladoPublica);
+        String timeStampStr = new String(timeStamp);
+        System.out.println("Fecha del sello: " + timeStampStr);
 
         return MessageDigest.isEqual(selloDescifrado, hashFirma);
     }
