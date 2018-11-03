@@ -18,6 +18,7 @@ public class DesempaquetarExamen {
     args [2] = "EntSellado.publica";
     args [3] = "Alumno.publica";
     args [4] = "Profesor.privada";*/
+
     public static void main(String[] args) throws Exception {
 
         // Comprobar argumentos
@@ -35,13 +36,28 @@ public class DesempaquetarExamen {
         // Leer Alumno.paquete de la entidad de sellado
         Paquete paqueteSellado = desempaquetador(args[0]);
 
-        // Descomponer en firma, clave y paquete
-        if(comprobarSello(paqueteSellado, entSelladoPublica)) {
+        // Comprobamos que el sello de tiempo está correctamente puesto
+        if (comprobarSello(paqueteSellado, entSelladoPublica)) {
             System.out.println("\nEl sello es correcto");
-            descifrarExamen(paqueteSellado, alumnoPublica, profesorPrivateKey);
         } else {
             System.out.println("\nEl sello no se ha hecho en la hora indicada por la Entidad de Sellado");
+            System.exit(1);
         }
+
+        // Desciframos el contenido del Examen
+        descifrarExamen(paqueteSellado, profesorPrivateKey, "ExamenDescifrado.txt");
+
+        //Comprobamos que el contenido del examen pertenece realmente al Alumno
+        byte[] datosFirma = paqueteSellado.getBloque("Firma").getContenido();
+        byte[] firmaHash = desencriptarResumen(datosFirma, alumnoPublica);
+        byte[] hashingExamen = funcionHashing("ExamenDescifrado.txt");
+
+        if (MessageDigest.isEqual(hashingExamen, firmaHash)) {
+            System.out.println("El examen ha sido realizado por el alumno");
+        } else {
+            System.out.println("El alumno no es el autor del examen");
+        }
+
     }
 
     private static Paquete desempaquetador(String filename) {
@@ -53,29 +69,20 @@ public class DesempaquetarExamen {
         byte[] selloCifrado = paquete.getBloque("Sello").getContenido();
         byte[] timeStamp = paquete.getBloque("TimeStamp").getContenido();
         byte[] datosFirma = paquete.getBloque("Firma").getContenido();
-        byte[] hashFirma = funcionHashFirma(datosFirma,timeStamp);
-        byte[] selloDescifrado = descifrarHashFirma(selloCifrado,entSelladoPublica);
+        byte[] hashFirma = funcionHashFirma(datosFirma, timeStamp);
+        byte[] selloDescifrado = descifrarHashFirma(selloCifrado, entSelladoPublica);
 
         return MessageDigest.isEqual(selloDescifrado, hashFirma);
     }
 
-    private static void descifrarExamen(Paquete paquete, PublicKey alumnoPublicKey, PrivateKey clavePrivProf) throws Exception {
+    private static void descifrarExamen(Paquete paquete, PrivateKey clavePrivProf, String path) throws Exception {
         byte[] examenAlumnoCifrado = paquete.getBloque("Examen").getContenido();
         byte[] claveSimetrica = paquete.getBloque("Clave").getContenido();
-        byte[] datosFirma = paquete.getBloque("Firma").getContenido();
 
         byte[] claveSimetricaDescifrada = descifrarClaveSecreta(claveSimetrica, clavePrivProf);
-        //TODO: el descifrado de la firma no se usa
-        byte[] firmaHash = desencriptarResumen(datosFirma, alumnoPublicKey);
-        SecretKey clave = new SecretKeySpec(claveSimetricaDescifrada, 0, claveSimetricaDescifrada.length, "DES");
-        descifrarSimetrico(examenAlumnoCifrado, clave, "ExamenDescifrado.txt");
-        byte[] hashingExamen = funcionHashing("ExamenDescifrado.txt");
 
-        if(MessageDigest.isEqual(hashingExamen, firmaHash)) {
-            System.out.println("El examen ha sido realizado por el alumno");
-        } else {
-            System.out.println("El alumno no es el autor del examen");
-        }
+        SecretKey clave = new SecretKeySpec(claveSimetricaDescifrada, 0, claveSimetricaDescifrada.length, "DES");
+        descifrarSimetrico(examenAlumnoCifrado, clave, path);
     }
 
     private static byte[] funcionHashing(String file) throws Exception {
@@ -95,43 +102,27 @@ public class DesempaquetarExamen {
 
         in.close();
 
-        byte[] hashing = messageDigest.digest(); // Completar el resumen
-
-        //TODO- Borrar antes de enviar, solo es para traza
-        System.out.println("HASH:");
-        printHashing(hashing);
-
-        return hashing;
+        return messageDigest.digest(); // Completar el resumen
 
     }
 
     private static byte[] desencriptarResumen(byte[] datosFirma, PublicKey alumnoPublica) throws Exception {
 
-        byte[] resumenDescifrado;
-
         Cipher cifrador = Cipher.getInstance("RSA", "BC");
 
         cifrador.init(Cipher.DECRYPT_MODE, alumnoPublica);
 
-        resumenDescifrado = cifrador.doFinal(datosFirma);
-
-        //TESTING PURPOSES ONLY
-        System.out.println("RESUMEN DESCIFRADO: ");
-        printHashing(resumenDescifrado);
-
-        return resumenDescifrado;
+        return cifrador.doFinal(datosFirma);
 
     }
 
-    private static byte[] descifrarHashFirma(byte[] hashFirma, PublicKey entSelladoPublica)throws Exception{
+    private static byte[] descifrarHashFirma(byte[] hashFirma, PublicKey entSelladoPublica) throws Exception {
 
-        Cipher cifrador = Cipher.getInstance("RSA","BC");
+        Cipher cifrador = Cipher.getInstance("RSA", "BC");
 
         cifrador.init(Cipher.DECRYPT_MODE, entSelladoPublica);
 
-        byte[] selloDescifrado = cifrador.doFinal(hashFirma);
-
-        return selloDescifrado;
+        return cifrador.doFinal(hashFirma);
 
     }
 
@@ -142,34 +133,18 @@ public class DesempaquetarExamen {
         messageDigest.update(datosFirma); // Hacer el hash de los datos de firma
         messageDigest.update(TIMESTAMP); // A�adimos el hash de timestamp
 
-        byte[] resumenN = messageDigest.digest();
+        return messageDigest.digest();
 
-        // Mostrar resumen (no es necesario)
-        System.out.println("RESUMEN HASH:");
-        getBytes(resumenN);
-        return resumenN;
-    }
-
-    private static void getBytes(byte[] buffer) {
-
-        System.out.write(buffer, 0, buffer.length);
     }
 
     private static byte[] descifrarClaveSecreta(byte[] clave, PrivateKey ProfesorPrivateKey) throws Exception {
 
-        byte[] bufferDescifrado;
-
         Cipher cifrador = Cipher.getInstance("RSA", "BC");
 
         cifrador.init(Cipher.DECRYPT_MODE, ProfesorPrivateKey);  // Descifra con la clave privada
-        //TODO Poner aquí el return
-        bufferDescifrado = cifrador.doFinal(clave);
 
-        //TODO TESTING PURPOSES ONLY
-        System.out.println("CLAVE CIFRADO: ");
-        printHashing(bufferDescifrado);
+        return cifrador.doFinal(clave);
 
-        return bufferDescifrado;
     }
 
     private static void descifrarSimetrico(byte[] stringCifrado, SecretKey clave, String path) throws Exception {
@@ -201,12 +176,9 @@ public class DesempaquetarExamen {
         PKCS8EncodedKeySpec clavePrivadaSpec = new PKCS8EncodedKeySpec(bufferPriv);
         PrivateKey clavePrivada = KeyFactory.getInstance("RSA", "BC").generatePrivate(clavePrivadaSpec);
 
-        System.out.println("Clave Privada Profesor: " + clavePrivada);
-
         return clavePrivada;
     }
 
-    //TODO Funciones auxiliares
     private static void printHashing(byte[] buffer) {
         System.out.write(buffer, 0, buffer.length);
     }
@@ -220,12 +192,9 @@ public class DesempaquetarExamen {
         in.read(bufferPub, 0, tamanoFicheroClavePublica);
         in.close();
 
-        // 4.2 Recuperar clave publica desde datos codificados en formato X509
+        // Recuperar clave publica desde datos codificados en formato X509
         X509EncodedKeySpec clavePublicaSpec = new X509EncodedKeySpec(bufferPub);
         PublicKey clavePublica = KeyFactory.getInstance("RSA", "BC").generatePublic(clavePublicaSpec);
-
-        //TESTING PURPOSES ONLY
-        System.out.println("CLAVE PUBLICA: " + clavePublica);
 
         return clavePublica;
 
