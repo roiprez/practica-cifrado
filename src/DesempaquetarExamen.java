@@ -41,7 +41,7 @@ public class DesempaquetarExamen {
         //Comprobamos que el contenido del examen pertenece realmente al Alumno
         byte[] datosFirma = paqueteSellado.getBloque("Firma").getContenido();
         byte[] firmaHash = desencriptarResumen(datosFirma, alumnoPublica);
-        byte[] hashingExamen = funcionHashing(args[1]);
+        byte[] hashingExamen = hashing(args[1]);
 
         if (MessageDigest.isEqual(hashingExamen, firmaHash)) {
             System.out.println("El examen ha sido realizado por el alumno");
@@ -75,18 +75,18 @@ public class DesempaquetarExamen {
         descifrarSimetrico(examenAlumnoCifrado, clave, path);
     }
 
-    private static byte[] funcionHashing(String file) throws Exception {
+    private static byte[] hashing(String file) throws Exception {
         MessageDigest messageDigest = MessageDigest.getInstance("MD5");
-        /* Leemos el fichero por Kylobytes y se los vamos pasando a la funcion  hashing */
         byte[] buffer = new byte[1000];
-        FileInputStream in = new FileInputStream(file);
-        int leidos = in.read(buffer, 0, 1000);
-        while (leidos != -1) {
-            messageDigest.update(buffer, 0, leidos);
-            leidos = in.read(buffer, 0, 1000);
+        FileInputStream entrada = new FileInputStream(file);
+        int procesados = entrada.read(buffer, 0, 1000);
+        while (procesados != -1) {
+            messageDigest.update(buffer, 0, procesados);
+            procesados = entrada.read(buffer, 0, 1000);
         }
-        in.close();
-        return messageDigest.digest();
+        entrada.close();
+        byte[] hashing = messageDigest.digest();
+        return hashing;
     }
 
     private static byte[] desencriptarResumen(byte[] datosFirma, PublicKey alumnoPublica) throws Exception {

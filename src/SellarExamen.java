@@ -25,11 +25,11 @@ public class SellarExamen {
 	        byte[] datosFirma = leerFirma(paquete);
 	        //Construimos una estampa de la fecha y hora de sellado
 	        byte[] TIMESTAMP = LocalDateTime.now().toString().getBytes();
-	        //Aplicamos el hash a los datos extraidos de la firma
-	        byte[] hashFirma = hashingFirma(datosFirma,TIMESTAMP);
+	        //Aplicamos el hash a la firma y la estampa de tiempo.
+	        byte[] sello = hashingFirma(datosFirma,TIMESTAMP);
 	        //Ciframos el sello con la clave privada de la Entidad de sellado
 	        PrivateKey entSelladoPrivada = getPrivateKeyFromFile(args[1]);
-	        byte[] selloCifrado = cifrarHashFirma(hashFirma,entSelladoPrivada);
+	        byte[] selloCifrado = cifrarHashFirma(sello,entSelladoPrivada);
 	        //Empaquetamos todo
 	        empacador(TIMESTAMP,selloCifrado,paquete,args[0]);
 	        System.out.println("Examen cifrado y Empaquetado");
@@ -53,8 +53,8 @@ public class SellarExamen {
 	        MessageDigest messageDigest = MessageDigest.getInstance("MD5");
 	        messageDigest.update(datosFirma);
 	        messageDigest.update(timeStamp);
-	        byte[] resumenN = messageDigest.digest();
-	            return resumenN;
+	        byte[] sello = messageDigest.digest();
+	            return sello;
 	    }
 
 	    private static PrivateKey getPrivateKeyFromFile(String file) throws Exception{
