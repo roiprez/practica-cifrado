@@ -12,131 +12,89 @@ import java.security.spec.X509EncodedKeySpec;
 public class EmpaquetarExamen {
 
     public static void main(String[] args) throws Exception {
-         /* args[0] = "ExamenClaro";
-          args[1] = "Alumno.paquete"; 
-          args [2] = "Alumno.privada";
-          args [3] = "Profesor.publica";*/
 
+    	// Comprobamos que el numero de argumentos sea correcto
         if (args.length != 4) {
             System.out.println("Numero de Argumentos incorrecto");
+            System.out.println("La entrada debe ser algo de la forma ExamenClaro.txt Alumno.paquete Alumno.privada Profesor.publica");
             System.exit(1);
         }
-
         Security.addProvider(new BouncyCastleProvider());
-
-        //RESUMEN (Acabado)
-        byte[] hashingExamen = funcionHashing(args[0]);
-        PrivateKey AlumnoPrivateKey = getPrivateKeyFromFile(args[2]);
-        byte[] hashingExamenCifrado = EncriptarResumen(hashingExamen, AlumnoPrivateKey);
-
-        //GENERAR CLAVE SECRETA PARA CIFRADO SIMETRICO
+        //Generamos la clave secreta para el cifrado simetrico
         SecretKey claveSimetrica = simetricKeyGenerator();
-
-        //CIFRAR EXAMEN
-        byte[] examenAlumnoCifrado = cifrarSimetrico(args[0], claveSimetrica);
-
-        //CIFRAR CLAVE SECRETA EXAMEN
+        //Ciframos la clave secreta del examen para su posterior empaquetado
         PublicKey ProfesorPublicKey = getPublicKeyFromFile(args[3]);
-        byte[] claveSimetricaCifrada = cifrarClaveSecreta(claveSimetrica, ProfesorPublicKey);
-
-        //EMPAQUETAR
-        empacador(examenAlumnoCifrado, claveSimetricaCifrada, hashingExamenCifrado, args[1]);
+        byte[] claveSimetricaCifrada = encriptarClaveSecreta(claveSimetrica, ProfesorPublicKey);
+        //Aplicamos hash para verificar que la informacion es la misma en los extremos
+        byte[] hashingExamen = hashing(args[0]);
+        PrivateKey AlumnoPrivateKey = getPrivateKeyFromFile(args[2]);
+        byte[] hashingExamenCifrado = encriptarHashing(hashingExamen, AlumnoPrivateKey);
+        //Ciframos el examen antes de empaquetarlo
+        byte[] examenAlumnoCifrado = cifradoSimetrico(args[0], claveSimetrica);
+        //Empaquetamos todo
+        empacador(claveSimetricaCifrada, hashingExamenCifrado,examenAlumnoCifrado, args[1]);
+        System.out.println("Examen cifrado y Empaquetado");
 
     }
 
-    //MAGICPACKER!!!!
-    private static void empacador(byte[] examenAlumnoCifrado, byte[] claveCifrada, byte[] resumenExamenCifrado, String filename) {
+
+    private static void empacador(byte[] claveCifrada, byte[] hashExamenCifrado,byte[] examenCifrado, String ficheroSalida) {
         Paquete paquete = new Paquete();
-        paquete.anadirBloque("Examen", examenAlumnoCifrado);
         paquete.anadirBloque("Clave", claveCifrada);
-        paquete.anadirBloque("Firma", resumenExamenCifrado);
-
-        PaqueteDAO.escribirPaquete(filename, paquete);
+        paquete.anadirBloque("Firma", hashExamenCifrado);
+        paquete.anadirBloque("Examen", examenCifrado);
+        PaqueteDAO.escribirPaquete(ficheroSalida, paquete);
     }
 
-    //Funciones de cifrado
-    //Simetrico
+  //Funciones de Cifrado
     private static SecretKey simetricKeyGenerator() throws Exception {
-
-        /* PASO 1: Crear e inicializar clave */
-
-        System.out.println("1. Generar clave DES");
-
         KeyGenerator generadorDES = KeyGenerator.getInstance("DES");
-        generadorDES.init(56); // clave de 56 bits
+        generadorDES.init(56);
         SecretKey clave = generadorDES.generateKey();
-
-        System.out.println("CLAVE:");
-        printHashing(clave.getEncoded());
-        System.out.println();
-
         return clave;
     }
-
-    private static byte[] cifrarSimetrico(String file, SecretKey clave) throws Exception {
-
-        /* Crear cifrador */
+    private static byte[] cifradoSimetrico(String fichero, SecretKey clave) throws Exception {
+        // Creamos un cifrador simetrico
         Cipher cifrador = Cipher.getInstance("DES/ECB/PKCS5Padding");
-        // Algoritmo DES
-        // Modo : ECB (Electronic Code Book)
-        // Relleno : PKCS5Padding
-
-        /* Inicializar cifrador en modo CIFRADO */
+        // Lo ponemos en modo cifrar
         cifrador.init(Cipher.ENCRYPT_MODE, clave);
-
-        File ficheroExamen = new File(file);
-        int tamanhoExamen = (int) ficheroExamen.length();
-        byte[] bufferExamen = new byte[tamanhoExamen];
-
-        FileInputStream in = new FileInputStream(ficheroExamen);
-        in.read(bufferExamen, 0, tamanhoExamen);
-        in.close();
-
-        byte[] bufferCifrado = cifrador.doFinal(bufferExamen);
-
-        //TESTING PURPOSES ONLY
-        System.out.println("EXAMEN CIFRADO: ");
-        printHashing(bufferCifrado);
-
-        return bufferCifrado;
+        File ficheroExamen = new File(fichero);
+        int longitud = (int) ficheroExamen.length();
+        byte[] examenClaro = new byte[longitud];
+        FileInputStream entrada = new FileInputStream(ficheroExamen);
+        entrada.read(examenClaro, 0, longitud);
+        entrada.close();
+        byte[] examenCifrado = cifrador.doFinal(examenClaro);
+        return examenCifrado;
     }
 
-    //Asimetrico
-    private static byte[] cifrarClaveSecreta(SecretKey clave, PublicKey ProfesorPublicKey) throws Exception {
-
-        byte[] bufferCifrado;
-
+    
+    private static byte[] encriptarClaveSecreta(SecretKey clave, PublicKey ProfesorPublicKey) throws Exception {
         Cipher cifrador = Cipher.getInstance("RSA", "BC");
-
-        cifrador.init(Cipher.ENCRYPT_MODE, ProfesorPublicKey);  // Cifra con la clave publica
-
-        bufferCifrado = cifrador.doFinal(clave.getEncoded());
-
-        //TESTING PURPOSES ONLY
-        System.out.println("CLAVE CIFRADO: ");
-        printHashing(bufferCifrado);
-
-        return bufferCifrado;
+        cifrador.init(Cipher.ENCRYPT_MODE, ProfesorPublicKey);  // Ciframos con la clave publica del profesor para garatizar que solo el pude ver la clave aleatoria
+        byte[] claveCifrada = cifrador.doFinal(clave.getEncoded());
+        return claveCifrada;
     }
 
-    //Funciones para recuperar claves de fichero
+    private static byte[] encriptarHashing(byte[] resumen, PrivateKey alumnoPrivada) throws Exception {
+        byte[] resumenCifrado;
+        Cipher theCipher = Cipher.getInstance("RSA", "BC");
+        theCipher.init(Cipher.ENCRYPT_MODE, alumnoPrivada);
+        resumenCifrado = theCipher.doFinal(resumen);
+        return resumenCifrado;
+
+    }
+    
+    //Funciones de extraccion de claves de ficheros
     private static PrivateKey getPrivateKeyFromFile(String file) throws Exception {
-
-        //Leer datos de la clave privada del fichero
         File ficheroClavePrivada = new File(file);
-        int tamanhoClavePrivada = (int) ficheroClavePrivada.length();
-        byte[] bufferPriv = new byte[tamanhoClavePrivada];
-
-        FileInputStream in = new FileInputStream(ficheroClavePrivada);
-        in.read(bufferPriv, 0, tamanhoClavePrivada);
-        in.close();
-
-        //Recuperamos del formato PKCS8
+        int longitudClavePrivada = (int) ficheroClavePrivada.length();
+        byte[] bufferPriv = new byte[longitudClavePrivada];
+        FileInputStream entrada = new FileInputStream(ficheroClavePrivada);
+        entrada.read(bufferPriv, 0, longitudClavePrivada);
+        entrada.close();
         PKCS8EncodedKeySpec clavePrivadaSpec = new PKCS8EncodedKeySpec(bufferPriv);
         PrivateKey clavePrivada = KeyFactory.getInstance("RSA", "BC").generatePrivate(clavePrivadaSpec);
-
-        System.out.println("Clave Privada Alumno: " + clavePrivada);
-
         return clavePrivada;
     }
 
@@ -144,72 +102,26 @@ public class EmpaquetarExamen {
         File ficheroClavePublica = new File(file);
         int tamanoFicheroClavePublica = (int) ficheroClavePublica.length();
         byte[] bufferPub = new byte[tamanoFicheroClavePublica];
-
-        FileInputStream in = new FileInputStream(ficheroClavePublica);
-        in.read(bufferPub, 0, tamanoFicheroClavePublica);
-        in.close();
-
-        // 4.2 Recuperar clave publica desde datos codificados en formato X509
+        FileInputStream entrada = new FileInputStream(ficheroClavePublica);
+        entrada.read(bufferPub, 0, tamanoFicheroClavePublica);
+        entrada.close();
         X509EncodedKeySpec clavePublicaSpec = new X509EncodedKeySpec(bufferPub);
         PublicKey clavePublica = KeyFactory.getInstance("RSA", "BC").generatePublic(clavePublicaSpec);
-
-        //TESTING PURPOSES ONLY
-        System.out.println("CLAVE PUBLICA: " + clavePublica);
-
         return clavePublica;
-
-    }
-
-    //Funciones kryptograficas RESUMEN
-    private static byte[] EncriptarResumen(byte[] resumen, PrivateKey alumnoPrivada) throws Exception {
-
-        byte[] resumenCifrado;
-
-        Cipher cifrador = Cipher.getInstance("RSA", "BC");
-
-        cifrador.init(Cipher.ENCRYPT_MODE, alumnoPrivada);
-
-        resumenCifrado = cifrador.doFinal(resumen);
-
-        //TESTING PURPOSES ONLY
-        System.out.println("RESUMEN CIFRADO: ");
-        printHashing(resumenCifrado);
-
-        return resumenCifrado;
-
-    }
-
-    private static byte[] funcionHashing(String file) throws Exception {
-
-        MessageDigest messageDigest = MessageDigest.getInstance("MD5");
-
-        /* Leemos el fichero por Kylobytes y se los vamos pasando a la funcion  hashing */
-        byte[] buffer = new byte[1000];
-
-        FileInputStream in = new FileInputStream(file);
-        int leidos = in.read(buffer, 0, 1000);
-
-        while (leidos != -1) {
-            messageDigest.update(buffer, 0, leidos);
-            leidos = in.read(buffer, 0, 1000);
-        }
-
-        in.close();
-
-        byte[] hashing = messageDigest.digest(); // Completar el resumen
-
-        //TODO- Borrar antes de enviar, solo es para traza
-        System.out.println("HASH:");
-        printHashing(hashing);
-
-        return hashing;
-
     }
 
     //Funciones auxiliares
-    private static void printHashing(byte[] buffer) {
-
-        System.out.write(buffer, 0, buffer.length);
+    private static byte[] hashing(String file) throws Exception {
+        MessageDigest messageDigest = MessageDigest.getInstance("MD5");
+        byte[] buffer = new byte[1000];
+        FileInputStream entrada = new FileInputStream(file);
+        int procesados = entrada.read(buffer, 0, 1000);
+        while (procesados != -1) {
+            messageDigest.update(buffer, 0, procesados);
+            procesados = entrada.read(buffer, 0, 1000);
+        }
+        entrada.close();
+        byte[] hashing = messageDigest.digest();
+        return hashing;
     }
-
 }
